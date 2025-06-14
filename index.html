@@ -1,0 +1,580 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temp Email Service</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #e0e7ff, #c3dafe);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            max-width: 1200px;
+            width: 100%;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        h1 {
+            color: #1e3a8a;
+            font-size: 28px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .email-section {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .email-input {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        #username-input {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            width: 200px;
+        }
+        #domain-select {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            width: 200px;
+        }
+        #email-address {
+            font-size: 20px;
+            font-weight: 500;
+            color: #2563eb;
+            word-break: break-all;
+            margin: 15px 0;
+            padding: 10px;
+            background: #e0f2fe;
+            border-radius: 6px;
+        }
+        .button {
+            padding: 12px 24px;
+            margin: 8px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .copy-btn {
+            background: #22c55e;
+            color: white;
+        }
+        .copy-btn:hover {
+            background: #16a34a;
+        }
+        .refresh-btn {
+            background: #3b82f6;
+            color: white;
+        }
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+        .check-btn {
+            background: #f59e0b;
+            color: white;
+        }
+        .check-btn:hover {
+            background: #d97706;
+        }
+        .clear-btn {
+            background: #ef4444;
+            color: white;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        .clear-btn:hover {
+            background: #dc2626;
+        }
+        .delete-btn {
+            background: transparent;
+            border: none;
+            color: #ef4444;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px;
+        }
+        .delete-btn:hover {
+            color: #dc2626;
+        }
+        .content-area {
+            display: flex;
+            gap: 20px;
+            height: 400px;
+        }
+        .email-list {
+            flex: 3;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            overflow-y: auto;
+            position: relative;
+        }
+        .email-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .email-table th, .email-table td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px;
+            text-align: left;
+        }
+        .email-table th {
+            background: #f1f5f9;
+            color: #1e3a8a;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        .email-table tr {
+            cursor: pointer;
+        }
+        .email-table tr:nth-child(even) {
+            background: #f8fafc;
+        }
+        .email-table tr:hover {
+            background: #e0f2fe;
+        }
+        .email-table tr.selected {
+            background: #bfdbfe;
+        }
+        .email-content {
+            flex: 7;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .email-content h3 {
+            color: #1e3a8a;
+            margin-bottom: 10px;
+        }
+        .email-content p {
+            color: #475569;
+            line-height: 1.6;
+        }
+        .error {
+            color: #dc2626;
+            margin: 15px 0;
+            font-size: 14px;
+            display: none;
+            background: #fee2e2;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .loading {
+            color: #475569;
+            margin: 15px 0;
+            font-size: 14px;
+            display: none;
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .inbox-controls {
+            padding: 10px;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: right;
+        }
+        @media (max-width: 800px) {
+            .content-area {
+                flex-direction: column;
+                height: auto;
+            }
+            .email-list, .email-content {
+                flex: none;
+                max-height: 300px;
+            }
+            .container {
+                padding: 15px;
+            }
+            h1 {
+                font-size: 24px;
+            }
+            #email-address {
+                font-size: 16px;
+            }
+            .button {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+            .email-table th, .email-table td {
+                padding: 8px;
+                font-size: 14px;
+            }
+            .email-input {
+                flex-direction: column;
+                align-items: center;
+            }
+            #username-input, #domain-select {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Temporary Email Service</h1>
+        <div class="email-section">
+            <div class="email-input">
+                <input type="text" id="username-input" placeholder="Enter username (optional)">
+                <select id="domain-select">
+                    <option value="">Random domain</option>
+                    <option value="tempmail.ckvn.edu.vn">tempmail.ckvn.edu.vn</option>
+                    <option value="tempmail.id.vn">tempmail.id.vn</option>
+                    <option value="1trick.net">1trick.net</option>
+                    <option value="nghienplus.io.vn">nghienplus.io.vn</option>
+                </select>
+            </div>
+            <div id="email-address">Loading email...</div>
+            <button class="button copy-btn" onclick="copyEmail()">Copy Email</button>
+            <button class="button refresh-btn" onclick="refreshEmail()">Refresh Email</button>
+            <button class="button check-btn" onclick="fetchEmails()">Check Inbox Now</button>
+        </div>
+        <div id="error" class="error"></div>
+        <div id="loading" class="loading">Loading emails...</div>
+        <div class="content-area">
+            <div class="email-list">
+                <div class="inbox-controls">
+                    <button class="button clear-btn" onclick="clearInbox()">Clear Inbox</button>
+                </div>
+                <table class="email-table" id="email-table">
+                    <thead>
+                        <tr>
+                            <th>From</th>
+                            <th>Subject</th>
+                            <th>Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="email-list"></tbody>
+                </table>
+            </div>
+            <div class="email-content" id="email-content">
+                <h3>Select an email to view its content</h3>
+                <p>Click on an email in the list to display its details here.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://tempmail.id.vn/api';
+        const API_KEY = '4806|fk8hWXfiqReAOY0EV69KzYmLiuAwITkxH6hbV8pjaa41b6d9';
+        let currentEmail = '';
+        let currentMailId = '';
+        let selectedMessageId = null;
+        let messages = [];
+
+        // Generate random username
+        function generateRandomUsername() {
+            return 'user' + Math.random().toString(36).substr(2, 8);
+        }
+
+        async function fetchEmailAddress() {
+            try {
+                showLoading(true);
+                hideError();
+                document.getElementById('email-address').textContent = 'Loading email...';
+                const username = document.getElementById('username-input').value.trim();
+                const domain = document.getElementById('domain-select').value;
+                let body = {};
+                if (username && domain) {
+                    body = { user: username, domain: domain };
+                } else if (domain) {
+                    body = { user: generateRandomUsername(), domain: domain };
+                } else if (username) {
+                    body = { user: username };
+                }
+                console.log('Request body:', body);
+                const response = await fetch(`${API_BASE}/email/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify(body),
+                    signal: AbortSignal.timeout(10000)
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
+                }
+                const data = await response.json();
+                console.log('Create email response:', data);
+                if (data.data && data.data.email && data.data.id) {
+                    currentEmail = data.data.email;
+                    currentMailId = data.data.id;
+                    const expectedDomain = domain || null;
+                    if (expectedDomain && !currentEmail.endsWith(expectedDomain)) {
+                        throw new Error(`Created email domain (${currentEmail.split('@')[1]}) does not match selected domain (${expectedDomain})`);
+                    }
+                    document.getElementById('email-address').textContent = currentEmail;
+                    messages = []; // Reset messages on new email
+                    fetchEmails();
+                } else {
+                    throw new Error('No email or ID in response');
+                }
+            } catch (error) {
+                showError(`Error creating email: ${error.message}`);
+                document.getElementById('email-address').textContent = 'Failed to load email';
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function fetchEmails() {
+            if (!currentMailId) {
+                showError('No email ID available. Please refresh email.');
+                return;
+            }
+            try {
+                showLoading(true);
+                hideError();
+                const response = await fetch(`${API_BASE}/email/${currentMailId}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    signal: AbortSignal.timeout(10000)
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
+                }
+                const data = await response.json();
+                console.log('Fetch emails response:', data);
+                if (data.data && Array.isArray(data.data.items)) {
+                    // Merge new messages, avoid duplicates
+                    const newMessages = data.data.items.filter(newMsg => 
+                        !messages.some(oldMsg => oldMsg.id === newMsg.id)
+                    );
+                    messages = [...messages, ...newMessages];
+                    displayEmails(messages);
+                } else {
+                    showError('No messages found or invalid response format.');
+                    displayEmails(messages);
+                }
+            } catch (error) {
+                showError(`Error fetching emails: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function fetchMessageContent(messageId) {
+            try {
+                showLoading(true);
+                hideError();
+                const response = await fetch(`${API_BASE}/message/${messageId}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    signal: AbortSignal.timeout(10000)
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
+                }
+                const data = await response.json();
+                console.log('Fetch message content response:', data);
+                if (data.data && data.data.body) {
+                    displayMessageContent(data.data);
+                } else {
+                    showError('No message body found.');
+                    displayMessageContent(null);
+                }
+            } catch (error) {
+                showError(`Error fetching message content: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayEmails(messages) {
+            const emailList = document.getElementById('email-list');
+            emailList.innerHTML = '';
+            if (messages.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = '<td colspan="4">No emails received yet.</td>';
+                emailList.appendChild(row);
+                return;
+            }
+            messages.forEach(message => {
+                const row = document.createElement('tr');
+                row.className = message.id === selectedMessageId ? 'selected' : '';
+                row.innerHTML = `
+                    <td>${message.from || 'Unknown'}</td>
+                    <td>${message.subject || 'No Subject'}</td>
+                    <td>${new Date(message.created_at).toLocaleString()}</td>
+                    <td><button class="delete-btn" onclick="deleteEmail(${message.id})">🗑️</button></td>
+                `;
+                row.addEventListener('click', (e) => {
+                    if (e.target.className !== 'delete-btn') {
+                        selectedMessageId = message.id;
+                        fetchMessageContent(message.id);
+                        document.querySelectorAll('.email-table tr').forEach(r => r.classList.remove('selected'));
+                        row.classList.add('selected');
+                    }
+                });
+                emailList.appendChild(row);
+            });
+        }
+
+        function deleteEmail(messageId) {
+            messages = messages.filter(msg => msg.id !== messageId);
+            if (selectedMessageId === messageId) {
+                selectedMessageId = null;
+                displayMessageContent(null);
+            }
+            displayEmails(messages);
+        }
+
+        function clearInbox() {
+            if (confirm('Are you sure you want to clear all emails in the inbox?')) {
+                messages = [];
+                selectedMessageId = null;
+                displayEmails(messages);
+                displayMessageContent(null);
+            }
+        }
+
+        function displayMessageContent(message) {
+            const contentDiv = document.getElementById('email-content');
+            if (!message) {
+                contentDiv.innerHTML = `
+                    <h3>No Content Available</h3>
+                    <p>Please select an email to view its content.</p>
+                `;
+                return;
+            }
+            const formattedBody = (message.body || 'No content available.').replace(/\n/g, '<br>');
+            contentDiv.innerHTML = `
+                <h3>${message.subject || 'No Subject'}</h3>
+                <p><strong>From:</strong> ${message.from || 'Unknown'}</p>
+                <p><strong>Date:</strong> ${new Date(message.created_at).toLocaleString()}</p>
+                <hr style="border: 1px solid #e2e8f0; margin: 15px 0;">
+                <div>${formattedBody}</div>
+            `;
+        }
+
+        function copyEmail() {
+            if (!currentEmail) {
+                showError('No email address to copy.');
+                return;
+            }
+            navigator.clipboard.writeText(currentEmail).then(() => {
+                alert('Email copied to clipboard!');
+            }).catch(err => {
+                showError(`Failed to copy email: ${err.message}`);
+            });
+        }
+
+        function refreshEmail() {
+            currentEmail = '';
+            currentMailId = '';
+            selectedMessageId = null;
+            messages = [];
+            document.getElementById('email-address').textContent = 'Loading email...';
+            document.getElementById('email-content').innerHTML = `
+                <h3>Select an email to view its content</h3>
+                <p>Click on an email in the list to display its details here.</p>
+            `;
+            fetchEmailAddress();
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = '';
+            errorDiv.style.display = 'none';
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // Initial fetch
+        fetchEmailAddress();
+
+        // Check inbox every 10 seconds
+        setInterval(fetchEmails, 10000);
+    </script>
+</body>
+</html>
