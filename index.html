@@ -289,11 +289,7 @@
             <div class="email-input">
                 <input type="text" id="username-input" placeholder="Enter username (optional)">
                 <select id="domain-select">
-                    <option value="">Random domain</option>
                     <option value="tempmail.ckvn.edu.vn">tempmail.ckvn.edu.vn</option>
-                    <option value="tempmail.id.vn">tempmail.id.vn</option>
-                    <option value="1trick.net">1trick.net</option>
-                    <option value="nghienplus.io.vn">nghienplus.io.vn</option>
                 </select>
             </div>
             <div id="email-address">Loading email...</div>
@@ -329,11 +325,12 @@
 
     <script>
         const API_BASE = 'https://tempmail.id.vn/api';
-        const API_KEY = '4806|fk8hWXfiqReAOY0EV69KzYmLiuAwITkxH6hbV8pjaa41b6d9';
+        const API_KEY = '4807|Cu0WwlTwwy1SvsxQ0Q0TnJebRFbTDn1E8yDEKbSXfc9775c2';
         let currentEmail = '';
         let currentMailId = '';
         let selectedMessageId = null;
         let messages = [];
+        let isAutoCheckingEnabled = true;  // Flag to control auto-checking
 
         // Generate random username
         function generateRandomUsername() {
@@ -398,6 +395,9 @@
                 showError('No email ID available. Please refresh email.');
                 return;
             }
+            if (!isAutoCheckingEnabled) {
+                return;  // Skip if auto-checking is disabled
+            }
             try {
                 showLoading(true);
                 hideError();
@@ -421,6 +421,18 @@
                     );
                     messages = [...messages, ...newMessages];
                     displayEmails(messages);
+                    
+                    // Auto-open the latest email if it's new
+                    if (newMessages.length > 0) {
+                        const latestMessage = newMessages[newMessages.length - 1];
+                        selectedMessageId = latestMessage.id;
+                        fetchMessageContent(latestMessage.id);
+                        document.querySelectorAll('.email-table tr').forEach(r => r.classList.remove('selected'));
+                        const latestRow = document.querySelector(`tr[data-message-id="${latestMessage.id}"]`);
+                        if (latestRow) {
+                            latestRow.classList.add('selected');
+                        }
+                    }
                 } else {
                     showError('No messages found or invalid response format.');
                     displayEmails(messages);
@@ -474,6 +486,7 @@
             messages.forEach(message => {
                 const row = document.createElement('tr');
                 row.className = message.id === selectedMessageId ? 'selected' : '';
+                row.setAttribute('data-message-id', message.id);
                 row.innerHTML = `
                     <td>${message.from || 'Unknown'}</td>
                     <td>${message.subject || 'No Subject'}</td>
@@ -519,6 +532,8 @@
                 `;
                 return;
             }
+            // Disable auto-checking when reading an email
+            isAutoCheckingEnabled = false;
             const formattedBody = (message.body || 'No content available.').replace(/\n/g, '<br>');
             contentDiv.innerHTML = `
                 <h3>${message.subject || 'No Subject'}</h3>
@@ -546,6 +561,7 @@
             currentMailId = '';
             selectedMessageId = null;
             messages = [];
+            isAutoCheckingEnabled = true;  // Re-enable auto-checking when refreshing email
             document.getElementById('email-address').textContent = 'Loading email...';
             document.getElementById('email-content').innerHTML = `
                 <h3>Select an email to view its content</h3>
