@@ -550,7 +550,7 @@
                 return;
             }
             navigator.clipboard.writeText(currentEmail).then(() => {
-                alert('Email copied to clipboard!');
+
             }).catch(err => {
                 showError(`Failed to copy email: ${err.message}`);
             });
