@@ -1,4 +1,5 @@
 
+
 <script type="text/javascript">
         var gk_isXlsx = false;
         var gk_xlsxFileLookup = {};
@@ -39,11 +40,11 @@
         return gk_fileData[filename] || "";
         }
         </script><!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temp Email Service</title>
+    <title>Dịch vụ Email tạm thời</title>
     <style>
         * {
             box-sizing: border-box;
@@ -302,6 +303,12 @@
             letter-spacing: 5px;
             font-family: 'Courier New', Courier, monospace;
         }
+        .countdown-status {
+            color: #475569;
+            font-size: 14px;
+            margin-top: 15px;
+            min-height: 20px;
+        }
         @media (max-width: 800px) {
             .content-area {
                 flex-direction: column;
@@ -359,7 +366,8 @@
             <div id="email-address">Đang tải nội dung hòm thư...</div>
             <button class="button copy-btn" onclick="copyEmail()">Copy Email</button>
             <button class="button random-btn" onclick="refreshEmail()">Tạo email random</button>
-            <button class="button refresh-btn" onclick="fetchEmails()">Làm mới hòm thư</button>
+            <button class="button refresh-btn" onclick="fetchEmails(false)">Làm mới hòm thư</button>
+            <div id="countdown-status" class="countdown-status"></div>
         </div>
         <div id="error" class="error"></div>
         <div id="loading" class="loading">Đang tải nội dung hòm thư...</div>
@@ -371,18 +379,18 @@
                 <table class="email-table" id="email-table">
                     <thead>
                         <tr>
-                            <th>From</th>
-                            <th>Subject</th>
-                            <th>Date</th>
-                            <th>Action</th>
+                            <th>Từ</th>
+                            <th>Chủ đề</th>
+                            <th>Ngày</th>
+                            <th>Hành động</th>
                         </tr>
                     </thead>
                     <tbody id="email-list"></tbody>
                 </table>
             </div>
             <div class="email-content" id="email-content">
-                <h3>Select an email to view its content</h3>
-                <p>Click on an email in the list to display its details here.</p>
+                <h3>Chọn một email để xem nội dung</h3>
+                <p>Nhấp vào một email trong danh sách để hiển thị chi tiết tại đây.</p>
             </div>
         </div>
     </div>
@@ -393,7 +401,7 @@
             <h2>Đã tìm thấy mã OTP</h2>
             <p>Mã OTP của bạn là:</p>
             <div id="otp-code" class="otp-display">123456</div>
-            <button class="button copy-btn" onclick="copyOtp()">Copy Code</button>
+            <button class="button copy-btn" onclick="copyOtp()">Sao chép mã</button>
         </div>
     </div>
 
@@ -407,6 +415,11 @@
         let messages = [];
         let isAutoCheckingEnabled = true;
 
+        let autoRefreshInterval = null;
+        let countdownInterval = null;
+        let checkCounter = 1;
+        let countdownValue = 10;
+
         function generateRandomUsername() {
             return 'user' + Math.random().toString(36).substr(2, 8);
         }
@@ -415,7 +428,7 @@
             try {
                 showLoading(true);
                 hideError();
-                document.getElementById('email-address').textContent = 'Loading email...';
+                document.getElementById('email-address').textContent = 'Đang tạo email...';
                 const username = document.getElementById('username-input').value.trim();
                 const domain = document.getElementById('domain-select').value;
                 let body = {};
@@ -438,7 +451,7 @@
                 });
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
+                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Lỗi không xác định'}`);
                 }
                 const data = await response.json();
                 if (data.data && data.data.email && data.data.id) {
@@ -446,28 +459,29 @@
                     currentMailId = data.data.id;
                     const expectedDomain = domain || null;
                     if (expectedDomain && !currentEmail.endsWith(expectedDomain)) {
-                        throw new Error(`Created email domain (${currentEmail.split('@')[1]}) does not match selected domain (${expectedDomain})`);
+                        throw new Error(`Miền email được tạo (${currentEmail.split('@')[1]}) không khớp với miền đã chọn (${expectedDomain})`);
                     }
                     document.getElementById('email-address').textContent = currentEmail;
                     messages = []; // Reset messages on new email
-                    fetchEmails();
+                    fetchEmails(true); // Initial fetch after creating email
+                    startAutoRefresh();
                 } else {
-                    throw new Error('No email or ID in response');
+                    throw new Error('Không có email hoặc ID trong phản hồi');
                 }
             } catch (error) {
-                showError(`Error creating email: ${error.message}`);
+                showError(`Lỗi tạo email: ${error.message}`);
                 document.getElementById('email-address').textContent = 'Không tìm thấy địa chỉ email';
             } finally {
                 showLoading(false);
             }
         }
 
-        async function fetchEmails() {
+        async function fetchEmails(isAuto = true) {
             if (!currentMailId) {
                 showError('Không tìm thấy địa chỉ email, vui lòng chọn tạo email mới, hoặc làm mới hòm thư.');
                 return;
             }
-            if (!isAutoCheckingEnabled) {
+            if (!isAutoCheckingEnabled && isAuto) {
                 return;
             }
             try {
@@ -479,7 +493,7 @@
                 });
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
+                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Lỗi không xác định'}`);
                 }
                 const data = await response.json();
                 if (data.data && Array.isArray(data.data.items)) {
@@ -496,12 +510,14 @@
                         await fetchMessageContent(latestMessage.id, true);
                         
                         displayEmails(messages);
+                    } else {
+                        displayEmails(messages); 
                     }
                 } else {
-                    displayEmails(messages); // Still refresh list even if no new messages
+                    displayEmails(messages);
                 }
             } catch (error) {
-                showError(`Error fetching emails: ${error.message}`);
+                showError(`Lỗi khi tải email: ${error.message}`);
             } finally {
                 showLoading(false);
             }
@@ -517,7 +533,7 @@
                 });
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
+                    throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Lỗi không xác định'}`);
                 }
                 const data = await response.json();
                 if (data.data && data.data.body) {
@@ -527,11 +543,11 @@
                         showOtpPopup(otp);
                     }
                 } else {
-                    showError('No message body found.');
+                    showError('Không tìm thấy nội dung thư.');
                     displayMessageContent(null);
                 }
             } catch (error) {
-                showError(`Error fetching message content: ${error.message}`);
+                showError(`Lỗi khi tải nội dung thư: ${error.message}`);
             } finally {
                 showLoading(false);
             }
@@ -542,7 +558,7 @@
             emailList.innerHTML = '';
             if (messages.length === 0) {
                 const row = document.createElement('tr');
-                row.innerHTML = '<td colspan="4">No emails received yet.</td>';
+                row.innerHTML = '<td colspan="4">Chưa nhận được email nào.</td>';
                 emailList.appendChild(row);
                 return;
             }
@@ -552,8 +568,8 @@
                 row.className = message.id === selectedMessageId ? 'selected' : '';
                 row.setAttribute('data-message-id', message.id);
                 row.innerHTML = `
-                    <td>${message.from || 'Unknown'}</td>
-                    <td>${message.subject || 'No Subject'}</td>
+                    <td>${message.from || 'Không rõ'}</td>
+                    <td>${message.subject || 'Không có chủ đề'}</td>
                     <td>${new Date(message.created_at).toLocaleString()}</td>
                     <td><button class="delete-btn" onclick="event.stopPropagation(); deleteEmail(${message.id})">🗑️</button></td>
                 `;
@@ -577,7 +593,7 @@
         }
 
         function clearInbox() {
-            if (confirm('Are you sure you want to clear all emails in the inbox?')) {
+            if (confirm('Bạn có chắc chắn muốn xóa tất cả email trong hộp thư không?')) {
                 messages = [];
                 selectedMessageId = null;
                 displayEmails(messages);
@@ -589,19 +605,20 @@
             const contentDiv = document.getElementById('email-content');
             if (!message) {
                 contentDiv.innerHTML = `
-                    <h3>No Content Available</h3>
-                    <p>Please select an email to view its content.</p>
+                    <h3>Không có nội dung</h3>
+                    <p>Vui lòng chọn một email để xem nội dung.</p>
                 `;
                 return;
             }
             if (!isAutoFetch) {
                 isAutoCheckingEnabled = false;
+                stopAutoRefresh();
             }
-            const formattedBody = (message.body || 'No content available.').replace(/\n/g, '<br>');
+            const formattedBody = (message.body || 'Không có nội dung.').replace(/\n/g, '<br>');
             contentDiv.innerHTML = `
-                <h3>${message.subject || 'No Subject'}</h3>
-                <p><strong>From:</strong> ${message.from || 'Unknown'}</p>
-                <p><strong>Date:</strong> ${new Date(message.created_at).toLocaleString()}</p>
+                <h3>${message.subject || 'Không có chủ đề'}</h3>
+                <p><strong>Từ:</strong> ${message.from || 'Không rõ'}</p>
+                <p><strong>Ngày:</strong> ${new Date(message.created_at).toLocaleString()}</p>
                 <hr style="border: 1px solid #e2e8f0; margin: 15px 0;">
                 <div>${formattedBody}</div>
             `;
@@ -609,25 +626,26 @@
 
         function copyEmail() {
             if (!currentEmail) {
-                showError('No email address to copy.');
+                showError('Không có địa chỉ email để sao chép.');
                 return;
             }
             navigator.clipboard.writeText(currentEmail).catch(err => {
-                showError(`Failed to copy email: ${err.message}`);
+                showError(`Sao chép email thất bại: ${err.message}`);
             });
         }
 
         function refreshEmail() {
+            stopAutoRefresh();
             currentEmail = '';
             currentMailId = '';
             selectedMessageId = null;
             messages = [];
             isAutoCheckingEnabled = true;
             document.getElementById('username-input').value = '';
-            document.getElementById('email-address').textContent = 'Loading email...';
+            document.getElementById('email-address').textContent = 'Đang tạo email...';
             document.getElementById('email-content').innerHTML = `
-                <h3>Select an email to view its content</h3>
-                <p>Click on an email in the list to display its details here.</p>
+                <h3>Chọn một email để xem nội dung</h3>
+                <p>Nhấp vào một email trong danh sách để hiển thị chi tiết tại đây.</p>
             `;
             displayEmails(messages);
             fetchEmailAddress();
@@ -650,17 +668,11 @@
         }
 
         function checkForOtp(text) {
-            // This regex finds any sequence of 6 digits that is not part of a larger number.
-            // The 'g' flag ensures we find all matches, not just the first one.
             const otpRegex = /(?<!\d)\d{6}(?!\d)/g;
             const matches = text.match(otpRegex);
-
-            // If matches are found, the actual OTP is often the last one in the email body.
-            // We return the last match from the array.
             if (matches && matches.length > 0) {
                 return matches[matches.length - 1];
             }
-            
             return null;
         }
 
@@ -682,10 +694,50 @@
             navigator.clipboard.writeText(otp).then(() => {
                 hideOtpPopup();
             }).catch(err => {
-                showError(`Failed to copy OTP: ${err.message}`);
+                showError(`Sao chép OTP thất bại: ${err.message}`);
             });
         }
         
+        function stopAutoRefresh() {
+            clearInterval(autoRefreshInterval);
+            clearInterval(countdownInterval);
+            const statusDiv = document.getElementById('countdown-status');
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+            }
+        }
+
+        function startAutoRefresh() {
+            stopAutoRefresh();
+            if (!currentMailId) return;
+
+            checkCounter = 1;
+            countdownValue = 10;
+            isAutoCheckingEnabled = true;
+            
+            autoRefreshInterval = setInterval(() => {
+                if (isAutoCheckingEnabled) {
+                    fetchEmails(true);
+                    checkCounter++;
+                    countdownValue = 10;
+                }
+            }, 10000);
+
+            countdownInterval = setInterval(() => {
+                const statusDiv = document.getElementById('countdown-status');
+                if (isAutoCheckingEnabled && currentMailId) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.textContent = `Tự động làm mới lần #${checkCounter} sau ${countdownValue} giây...`;
+                    countdownValue--;
+                    if (countdownValue < 0) {
+                        countdownValue = 0; 
+                    }
+                } else {
+                    stopAutoRefresh();
+                }
+            }, 1000);
+        }
+
         document.getElementById('otp-modal').addEventListener('click', (e) => {
             if (e.target.id === 'otp-modal') {
                 hideOtpPopup();
@@ -693,7 +745,6 @@
         });
 
         fetchEmailAddress();
-        setInterval(fetchEmails, 10000);
     </script>
 </body>
 </html>
