@@ -129,19 +129,19 @@
         .copy-btn:hover {
             background: #16a34a;
         }
+        .random-btn {
+            background: #8b5cf6;
+            color: white;
+        }
+        .random-btn:hover {
+            background: #7c3aed;
+        }
         .refresh-btn {
             background: #3b82f6;
             color: white;
         }
         .refresh-btn:hover {
             background: #2563eb;
-        }
-        .check-btn {
-            background: #f59e0b;
-            color: white;
-        }
-        .check-btn:hover {
-            background: #d97706;
         }
         .clear-btn {
             background: #ef4444;
@@ -345,29 +345,28 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div class="container">
-        <h1>Temporary Email Service</h1>
+        <h1>Dịch vụ Temp Email by Mực Phệ</h1>
         <div class="email-section">
             <div class="email-input">
-                <input type="text" id="username-input" placeholder="Enter username (optional)">
+                <input type="text" id="username-input" placeholder="Địa chỉ email muốn đặt">
                 <select id="domain-select">
                     <option value="tempmail.ckvn.edu.vn">tempmail.ckvn.edu.vn</option>
                 </select>
             </div>
-            <div id="email-address">Loading email...</div>
+            <div id="email-address">Đang tải nội dung hòm thư...</div>
             <button class="button copy-btn" onclick="copyEmail()">Copy Email</button>
-            <button class="button refresh-btn" onclick="refreshEmail()">Refresh Email</button>
-            <button class="button check-btn" onclick="fetchEmails()">Check Inbox Now</button>
+            <button class="button random-btn" onclick="refreshEmail()">Tạo email random</button>
+            <button class="button refresh-btn" onclick="fetchEmails()">Làm mới hòm thư</button>
         </div>
         <div id="error" class="error"></div>
-        <div id="loading" class="loading">Loading emails...</div>
+        <div id="loading" class="loading">Đang tải nội dung hòm thư...</div>
         <div class="content-area">
             <div class="email-list">
                 <div class="inbox-controls">
-                    <button class="button clear-btn" onclick="clearInbox()">Clear Inbox</button>
+                    <button class="button clear-btn" onclick="clearInbox()">Xoá sạch</button>
                 </div>
                 <table class="email-table" id="email-table">
                     <thead>
@@ -391,8 +390,8 @@
     <div id="otp-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <span class="close-btn" onclick="hideOtpPopup()">&times;</span>
-            <h2>OTP Code Found!</h2>
-            <p>We found an OTP in your email:</p>
+            <h2>Đã tìm thấy mã OTP</h2>
+            <p>Mã OTP của bạn là:</p>
             <div id="otp-code" class="otp-display">123456</div>
             <button class="button copy-btn" onclick="copyOtp()">Copy Code</button>
         </div>
@@ -457,7 +456,7 @@
                 }
             } catch (error) {
                 showError(`Error creating email: ${error.message}`);
-                document.getElementById('email-address').textContent = 'Failed to load email';
+                document.getElementById('email-address').textContent = 'Không tìm thấy địa chỉ email';
             } finally {
                 showLoading(false);
             }
@@ -465,7 +464,7 @@
 
         async function fetchEmails() {
             if (!currentMailId) {
-                showError('No email ID available. Please refresh email.');
+                showError('Không tìm thấy địa chỉ email, vui lòng chọn tạo email mới, hoặc làm mới hòm thư.');
                 return;
             }
             if (!isAutoCheckingEnabled) {
@@ -499,8 +498,7 @@
                         displayEmails(messages);
                     }
                 } else {
-                    showError('No messages found or invalid response format.');
-                    displayEmails(messages);
+                    displayEmails(messages); // Still refresh list even if no new messages
                 }
             } catch (error) {
                 showError(`Error fetching emails: ${error.message}`);
@@ -625,11 +623,13 @@
             selectedMessageId = null;
             messages = [];
             isAutoCheckingEnabled = true;
+            document.getElementById('username-input').value = '';
             document.getElementById('email-address').textContent = 'Loading email...';
             document.getElementById('email-content').innerHTML = `
                 <h3>Select an email to view its content</h3>
                 <p>Click on an email in the list to display its details here.</p>
             `;
+            displayEmails(messages);
             fetchEmailAddress();
         }
 
@@ -695,6 +695,5 @@
         fetchEmailAddress();
         setInterval(fetchEmails, 10000);
     </script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
