@@ -1,3 +1,4 @@
+
 <script type="text/javascript">
         var gk_isXlsx = false;
         var gk_xlsxFileLookup = {};
@@ -245,6 +246,62 @@
             border-bottom: 1px solid #e2e8f0;
             text-align: right;
         }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            text-align: center;
+            position: relative;
+            max-width: 400px;
+            width: 90%;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+        .modal-content h2 {
+            color: #1e3a8a;
+            margin-bottom: 15px;
+        }
+        .modal-content .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-content .close-btn:hover {
+            color: #333;
+        }
+        .otp-display {
+            font-size: 36px;
+            font-weight: bold;
+            color: #2563eb;
+            background: #e0f2fe;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+            letter-spacing: 5px;
+            font-family: 'Courier New', Courier, monospace;
+        }
         @media (max-width: 800px) {
             .content-area {
                 flex-direction: column;
@@ -281,6 +338,14 @@
             }
         }
     </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.7.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div class="container">
@@ -323,6 +388,17 @@
         </div>
     </div>
 
+    <div id="otp-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <span class="close-btn" onclick="hideOtpPopup()">&times;</span>
+            <h2>OTP Code Found!</h2>
+            <p>We found an OTP in your email:</p>
+            <div id="otp-code" class="otp-display">123456</div>
+            <button class="button copy-btn" onclick="copyOtp()">Copy Code</button>
+        </div>
+    </div>
+
+
     <script>
         const API_BASE = 'https://tempmail.id.vn/api';
         const API_KEY = '4807|Cu0WwlTwwy1SvsxQ0Q0TnJebRFbTDn1E8yDEKbSXfc9775c2';
@@ -330,9 +406,8 @@
         let currentMailId = '';
         let selectedMessageId = null;
         let messages = [];
-        let isAutoCheckingEnabled = true;  // Flag to control auto-checking
+        let isAutoCheckingEnabled = true;
 
-        // Generate random username
         function generateRandomUsername() {
             return 'user' + Math.random().toString(36).substr(2, 8);
         }
@@ -352,7 +427,6 @@
                 } else if (username) {
                     body = { user: username };
                 }
-                console.log('Request body:', body);
                 const response = await fetch(`${API_BASE}/email/create`, {
                     method: 'POST',
                     headers: {
@@ -368,7 +442,6 @@
                     throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
                 }
                 const data = await response.json();
-                console.log('Create email response:', data);
                 if (data.data && data.data.email && data.data.id) {
                     currentEmail = data.data.email;
                     currentMailId = data.data.id;
@@ -396,16 +469,13 @@
                 return;
             }
             if (!isAutoCheckingEnabled) {
-                return;  // Skip if auto-checking is disabled
+                return;
             }
             try {
                 showLoading(true);
                 hideError();
                 const response = await fetch(`${API_BASE}/email/${currentMailId}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Authorization': `Bearer ${API_KEY}`
-                    },
+                    headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
                     signal: AbortSignal.timeout(10000)
                 });
                 if (!response.ok) {
@@ -413,25 +483,20 @@
                     throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
                 }
                 const data = await response.json();
-                console.log('Fetch emails response:', data);
                 if (data.data && Array.isArray(data.data.items)) {
-                    // Merge new messages, avoid duplicates
                     const newMessages = data.data.items.filter(newMsg => 
                         !messages.some(oldMsg => oldMsg.id === newMsg.id)
                     );
-                    messages = [...messages, ...newMessages];
-                    displayEmails(messages);
                     
-                    // Auto-open the latest email if it's new
                     if (newMessages.length > 0) {
+                        messages = [...messages, ...newMessages];
+                        newMessages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
                         const latestMessage = newMessages[newMessages.length - 1];
+                        
                         selectedMessageId = latestMessage.id;
-                        fetchMessageContent(latestMessage.id);
-                        document.querySelectorAll('.email-table tr').forEach(r => r.classList.remove('selected'));
-                        const latestRow = document.querySelector(`tr[data-message-id="${latestMessage.id}"]`);
-                        if (latestRow) {
-                            latestRow.classList.add('selected');
-                        }
+                        await fetchMessageContent(latestMessage.id, true);
+                        
+                        displayEmails(messages);
                     }
                 } else {
                     showError('No messages found or invalid response format.');
@@ -444,15 +509,12 @@
             }
         }
 
-        async function fetchMessageContent(messageId) {
+        async function fetchMessageContent(messageId, isAutoFetch = false) {
             try {
                 showLoading(true);
                 hideError();
                 const response = await fetch(`${API_BASE}/message/${messageId}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Authorization': `Bearer ${API_KEY}`
-                    },
+                    headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
                     signal: AbortSignal.timeout(10000)
                 });
                 if (!response.ok) {
@@ -460,9 +522,12 @@
                     throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText || 'Unknown error'}`);
                 }
                 const data = await response.json();
-                console.log('Fetch message content response:', data);
                 if (data.data && data.data.body) {
-                    displayMessageContent(data.data);
+                    displayMessageContent(data.data, isAutoFetch);
+                    const otp = checkForOtp(data.data.body);
+                    if (otp) {
+                        showOtpPopup(otp);
+                    }
                 } else {
                     showError('No message body found.');
                     displayMessageContent(null);
@@ -483,6 +548,7 @@
                 emailList.appendChild(row);
                 return;
             }
+            messages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             messages.forEach(message => {
                 const row = document.createElement('tr');
                 row.className = message.id === selectedMessageId ? 'selected' : '';
@@ -491,15 +557,13 @@
                     <td>${message.from || 'Unknown'}</td>
                     <td>${message.subject || 'No Subject'}</td>
                     <td>${new Date(message.created_at).toLocaleString()}</td>
-                    <td><button class="delete-btn" onclick="deleteEmail(${message.id})">🗑️</button></td>
+                    <td><button class="delete-btn" onclick="event.stopPropagation(); deleteEmail(${message.id})">🗑️</button></td>
                 `;
                 row.addEventListener('click', (e) => {
-                    if (e.target.className !== 'delete-btn') {
-                        selectedMessageId = message.id;
-                        fetchMessageContent(message.id);
-                        document.querySelectorAll('.email-table tr').forEach(r => r.classList.remove('selected'));
-                        row.classList.add('selected');
-                    }
+                    selectedMessageId = message.id;
+                    fetchMessageContent(message.id);
+                    document.querySelectorAll('.email-table tr').forEach(r => r.classList.remove('selected'));
+                    row.classList.add('selected');
                 });
                 emailList.appendChild(row);
             });
@@ -523,7 +587,7 @@
             }
         }
 
-        function displayMessageContent(message) {
+        function displayMessageContent(message, isAutoFetch = false) {
             const contentDiv = document.getElementById('email-content');
             if (!message) {
                 contentDiv.innerHTML = `
@@ -532,8 +596,9 @@
                 `;
                 return;
             }
-            // Disable auto-checking when reading an email
-            isAutoCheckingEnabled = false;
+            if (!isAutoFetch) {
+                isAutoCheckingEnabled = false;
+            }
             const formattedBody = (message.body || 'No content available.').replace(/\n/g, '<br>');
             contentDiv.innerHTML = `
                 <h3>${message.subject || 'No Subject'}</h3>
@@ -549,9 +614,7 @@
                 showError('No email address to copy.');
                 return;
             }
-            navigator.clipboard.writeText(currentEmail).then(() => {
-
-            }).catch(err => {
+            navigator.clipboard.writeText(currentEmail).catch(err => {
                 showError(`Failed to copy email: ${err.message}`);
             });
         }
@@ -561,7 +624,7 @@
             currentMailId = '';
             selectedMessageId = null;
             messages = [];
-            isAutoCheckingEnabled = true;  // Re-enable auto-checking when refreshing email
+            isAutoCheckingEnabled = true;
             document.getElementById('email-address').textContent = 'Loading email...';
             document.getElementById('email-content').innerHTML = `
                 <h3>Select an email to view its content</h3>
@@ -586,11 +649,52 @@
             document.getElementById('loading').style.display = show ? 'block' : 'none';
         }
 
-        // Initial fetch
-        fetchEmailAddress();
+        function checkForOtp(text) {
+            // This regex finds any sequence of 6 digits that is not part of a larger number.
+            // The 'g' flag ensures we find all matches, not just the first one.
+            const otpRegex = /(?<!\d)\d{6}(?!\d)/g;
+            const matches = text.match(otpRegex);
 
-        // Check inbox every 10 seconds
+            // If matches are found, the actual OTP is often the last one in the email body.
+            // We return the last match from the array.
+            if (matches && matches.length > 0) {
+                return matches[matches.length - 1];
+            }
+            
+            return null;
+        }
+
+        function showOtpPopup(otp) {
+            const modal = document.getElementById('otp-modal');
+            document.getElementById('otp-code').textContent = otp;
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('visible'), 10);
+        }
+
+        function hideOtpPopup() {
+            const modal = document.getElementById('otp-modal');
+            modal.classList.remove('visible');
+            setTimeout(() => modal.style.display = 'none', 300);
+        }
+
+        function copyOtp() {
+            const otp = document.getElementById('otp-code').textContent;
+            navigator.clipboard.writeText(otp).then(() => {
+                hideOtpPopup();
+            }).catch(err => {
+                showError(`Failed to copy OTP: ${err.message}`);
+            });
+        }
+        
+        document.getElementById('otp-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'otp-modal') {
+                hideOtpPopup();
+            }
+        });
+
+        fetchEmailAddress();
         setInterval(fetchEmails, 10000);
     </script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
